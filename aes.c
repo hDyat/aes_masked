@@ -442,6 +442,7 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 
     g_seed = (int_rand1 << 24) | (int_rand2 << 16) | (int_rand3 << 8) | (int_rand4);
 	
+	mask[4] = generateRandom();
 	memcpy(RoundKeyMasked, RoundKey, 176);
 	
 	
@@ -452,7 +453,7 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 	for (uint8_t i = 2; i < 4; i++) {
         mask[i] = generateRandom();
     }
-	mask[4] = generateRandom();
+	
 	for (uint8_t i = 0; i < 3; i++) 
 	{
 		mask_dummy1[i] = generateRandom();
@@ -467,17 +468,17 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 	{
 		mask_dummy2[i] = generateRandom();
 	}
-	for (uin8_t i = 3; i < 6; i++)
+	for (uint8_t i = 3; i < 6; i++)
 	{
 		mask_dummy1[i] = generateRandom();
 	}
 	mask_dummy2[4] = generateRandom();
-	mask[5] = generateRandom();
+	// mask[5] = generateRandom();
 	mask_dummy2[5] = generateRandom();
 	
 	//Calculate m1',m2',m3',m4'
 	calcMixColmask(mask);
-
+	mask[5] = generateRandom();
 	//Delay 
 	// Gen_delay(5);
 	
@@ -535,11 +536,44 @@ static void CipherMasked(void)
 		uint8_t i, j;
 		for (i = 0; i < 4; ++i)
 		{
-			for (j = 0; j < 4; ++j)
+			// for (j = 0; j < 4; ++j)
+			// {
+				// (*state_yat)[j][i] = generateRandom();
+				// (*state_yat)[j][i] ^= 0x5a;
+				// (*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
+				// (*state)[j][i] = SboxMasked[(*state)[j][i]];
+			// }
+			
+			j = 0;
+			{
+				(*state_yat)[j][i] ^= 0x5a;
+				(*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
+				(*state_yat)[j][i] = generateRandom();
+				(*state)[j][i] = SboxMasked[(*state)[j][i]];
+			}
+			
+			j = 1;
+			{
+				(*state_yat)[j][i] = generateRandom();
+				(*state_yat)[j][i] ^= 0x5a;
+				(*state)[j][i] = SboxMasked[(*state)[j][i]];
+				(*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
+			}
+			
+			j = 2;
 			{
 				(*state_yat)[j][i] ^= 0x5a;
 				(*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
 				(*state)[j][i] = SboxMasked[(*state)[j][i]];
+				(*state_yat)[j][i] = generateRandom();
+			}
+			
+			j = 3;
+			{
+				(*state_yat)[j][i] ^= 0x5a;
+				(*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
+				(*state_yat)[j][i] = generateRandom();
+				(*state)[j][i] = SboxMasked[(*state)[j][i]];	
 			}
 		}
 	}
@@ -548,7 +582,61 @@ static void CipherMasked(void)
 		SubBytesMasked();	
 	}
     //No impact on mask
-    ShiftRows();
+	if (round  != 1 || round != 8 || round != 9 || round != 10)
+	{
+		uint8_t temp;
+		uint8_t temp_yat;
+
+		// Rotate first row 1 columns to left
+		temp 			 = (*state)[0][1];
+		(*state)[0][1] = (*state)[1][1];
+		(*state)[1][1] = (*state)[2][1];
+		(*state)[2][1] = (*state)[3][1];
+		(*state)[3][1] = temp;
+		
+		temp_yat	   	   = (*state_yat)[0][1];
+		(*state_yat)[0][1] = (*state_yat)[1][1];
+		(*state_yat)[1][1] = (*state_yat)[2][1];
+		(*state_yat)[2][1] = (*state_yat)[3][1];
+		(*state_yat)[3][1] = temp_yat;
+		
+		
+
+		// Rotate second row 2 columns to left
+		temp 			 = (*state)[0][2];
+		(*state)[0][2] = (*state)[2][2];
+		(*state)[2][2] = temp;
+		
+		temp_yat 			 = (*state_yat)[0][2];
+		(*state_yat)[0][2] = (*state_yat)[2][2];
+		(*state_yat)[2][2] = temp_yat;
+
+		temp 			 = (*state)[1][2];
+		(*state)[1][2] = (*state)[3][2];
+		(*state)[3][2] = temp;
+		
+		temp_yat 			 = (*state_yat)[1][2];
+		(*state_yat)[1][2] = (*state_yat)[3][2];
+		(*state_yat)[3][2] = temp_yat;
+
+		// Rotate third row 3 columns to left
+		temp 			 = (*state)[0][3];
+		(*state)[0][3] = (*state)[3][3];
+		(*state)[3][3] = (*state)[2][3];
+		(*state)[2][3] = (*state)[1][3];
+		(*state)[1][3] = temp;
+		
+		temp_yat 			 = (*state_yat)[0][3];
+		(*state_yat)[0][3] = (*state_yat)[3][3];
+		(*state_yat)[3][3] = (*state_yat)[2][3];
+		(*state_yat)[2][3] = (*state_yat)[1][3];
+		(*state_yat)[1][3] = temp_yat;
+	}
+	else 
+	{
+		ShiftRows();
+	}
+    
     if (round == Nr)
     {
       break;
@@ -565,7 +653,25 @@ static void CipherMasked(void)
 
     // Add the First round key to the state before starting the rounds.
     // Masks change from M1',M2',M3',M4' to M
-    AddRoundKeyMasked(round);
+	if (round == 2 || round == 3 || round == 5 || round == 7)
+	{
+		{
+			uint8_t i, j;
+			for(i = 0; i < 4; i++)
+			{
+				for (j = 0; j < 4; ++j)
+				{
+					(*state_yat)[j][i] ^= (RoundKeyMasked[(round * Nb * 4) + (i * Nb) + j] ^ 0xa5);
+					(*state)[i][j] ^= RoundKeyMasked[(round * Nb * 4) + (i * Nb) + j];
+				}
+			}
+		}
+	}
+	else 
+	{
+		AddRoundKeyMasked(round);
+	}
+    
   }
 
   // Mask are removed by the last addroundkey
