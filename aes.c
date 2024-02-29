@@ -85,6 +85,11 @@ static uint8_t RoundKeyMasked[176] = {0};
 static uint8_t* Key;
 uint32_t g_seed;
 
+// Protect the mask 
+uint8_t mask_dummy1[10] = {0};
+uint8_t mask_dummy2[10] = {0};
+
+
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM -
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
@@ -176,9 +181,20 @@ static uint8_t getSBoxValue(uint8_t num)
 
 static void calcMixColmask(uint8_t mask[10])
 {
+  mask_dummy1[6] = mul_02[mask_dummy1[0]] ^ mul_03[mask_dummy1[1]] ^ mask_dummy1[2]         ^ mask_dummy1[3];
+  mask_dummy2[6] = mul_02[mask_dummy2[0]] ^ mul_03[mask_dummy2[1]] ^ mask_dummy2[2]         ^ mask_dummy2[3];
   mask[6] = mul_02[mask[0]] ^ mul_03[mask[1]] ^ mask[2]         ^ mask[3];
+  
+  mask_dummy1[7] = mask_dummy1[0]         ^ mul_02[mask_dummy1[1]] ^ mul_03[mask_dummy1[2]] ^ mask_dummy1[3];
   mask[7] = mask[0]         ^ mul_02[mask[1]] ^ mul_03[mask[2]] ^ mask[3];
+  mask_dummy2[7] = mask_dummy2[0]         ^ mul_02[mask_dummy2[1]] ^ mul_03[mask_dummy2[2]] ^ mask_dummy2[3];
+  
   mask[8] = mask[0]         ^ mask[1]         ^ mul_02[mask[2]] ^ mul_03[mask[3]];
+  mask_dummy1[8] = mask_dummy1[0]         ^ mask_dummy1[1]         ^ mul_02[mask_dummy1[2]] ^ mul_03[mask_dummy1[3]];
+  mask_dummy2[8] = mask_dummy2[0]         ^ mask_dummy2[1]         ^ mul_02[mask_dummy2[2]] ^ mul_03[mask_dummy2[3]];
+  
+  mask_dummy2[9] = mul_03[mask_dummy2[0]] ^ mask_dummy2[1]         ^ mask_dummy2[2]         ^ mul_02[mask_dummy2[3]];
+  mask_dummy1[9] = mul_03[mask_dummy1[0]] ^ mask_dummy1[1]         ^ mask_dummy1[2]         ^ mul_02[mask_dummy1[3]];
   mask[9] = mul_03[mask[0]] ^ mask[1]         ^ mask[2]         ^ mul_02[mask[3]];
 }
 
@@ -376,6 +392,23 @@ static void MixColumns(void)
         (*state)[i][3] = xtime(temp[0] ^ temp[3]) ^ temp[0] ^ temp[1] ^ temp[2];
     }
 }
+// MixColumns ghost
+static void MixColumnsGhost(void)
+{
+	uint8_t temp[4];
+    uint8_t i;
+    for (i = 0; i < 4; i++) {
+        temp[0] = (*state_yat)[i][0];
+        temp[1] = (*state_yat)[i][1];
+        temp[2] = (*state_yat)[i][2];
+        temp[3] = (*state_yat)[i][3];
+
+        (*state_yat)[i][0] = xtime(temp[0] ^ temp[1]) ^ temp[1] ^ temp[2] ^ temp[3];
+        (*state_yat)[i][1] = temp[0] ^ xtime(temp[1] ^ temp[2]) ^ temp[2] ^ temp[3];
+        (*state_yat)[i][2] = temp[0] ^ temp[1] ^ xtime(temp[2] ^ temp[3]) ^ temp[3];
+        (*state_yat)[i][3] = xtime(temp[0] ^ temp[3]) ^ temp[0] ^ temp[1] ^ temp[2];
+    }
+}
 
 static uint8_t generateRandom(void) {
     g_seed = (214013 * g_seed + 2531011);
@@ -416,9 +449,31 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 	// Gen_delay(5);
 	
 	// V3
-	for (uint8_t i = 0; i < 6; i++) {
+	for (uint8_t i = 2; i < 4; i++) {
         mask[i] = generateRandom();
     }
+	mask[4] = generateRandom();
+	for (uint8_t i = 0; i < 3; i++) 
+	{
+		mask_dummy1[i] = generateRandom();
+	}
+	mask[0] = generateRandom();
+	for (uint8_t i = 0; i < 2; i++)
+	{
+		mask_dummy2[i] = generateRandom();
+	}
+	mask[1] = generateRandom();
+	for (uint8_t i = 2; i < 4; i++)
+	{
+		mask_dummy2[i] = generateRandom();
+	}
+	for (uin8_t i = 3; i < 6; i++)
+	{
+		mask_dummy1[i] = generateRandom();
+	}
+	mask_dummy2[4] = generateRandom();
+	mask[5] = generateRandom();
+	mask_dummy2[5] = generateRandom();
 	
 	//Calculate m1',m2',m3',m4'
 	calcMixColmask(mask);
@@ -431,12 +486,14 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 
 	//Init masked key
 	//	Last round mask M' to mask 0
+	remask(state_yat, mask_dummy1[0], mask_dummy1[1], mask_dummy1[2], mask_dummy1[3], mask_dummy2[5], mask_dummy1[5], mask_dummy2[5], mask_dummy2[5]);
 	remask((state_t *) &RoundKeyMasked[(Nr * Nb * 4)], 0, 0, 0, 0, mask[5], mask[5], mask[5], mask[5]);
 
 	// Mask change from M1',M2',M3',M4' to M
 	for (uint8_t i = 0; i < Nr; i++)
 	{
 		remask((state_t *) &RoundKeyMasked[(i * Nb * 4)], mask[6], mask[7], mask[8], mask[9], mask[4], mask[4], mask[4], mask[4]);
+		remask(state_yat, mask_dummy1[6], mask_dummy1[7], mask_dummy1[8], mask_dummy1[9], mask[0], mask[0], mask[0], mask[0]);
 	}
 }
 
@@ -513,6 +570,8 @@ static void CipherMasked(void)
 
   // Mask are removed by the last addroundkey
   // From M' to 0
+  remask(state_yat, mask_dummy1[0], mask_dummy2[1], mask_dummy1[2], mask_dummy2[3], mask[4], mask[4], mask[4], mask[4]);
+  MixColumnsGhost();
   AddRoundKeyMasked(Nr);
 }
 
