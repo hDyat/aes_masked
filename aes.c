@@ -182,7 +182,56 @@ static void calcMixColmask(uint8_t mask[10])
   mask[9] = mul_03[mask[0]] ^ mask[1]         ^ mask[2]         ^ mul_02[mask[3]];
 }
 
+static uint8_t bitSlice(uint8_t data)
+{
+	uint8_t x1 = data >> 7;
+    uint8_t x2 = data >> 6;
+    uint8_t x3 = data >> 5;
+    uint8_t x4 = data >> 4;
+    
+    uint8_t x5 = data << 4;
+    uint8_t x6 = data << 5;
+    uint8_t x7 = data << 6;
+    uint8_t x8 = data << 7;
+    
+    x1 = x1 << 7;
+    x2 = x2 << 7;
+    x3 = x3 << 7;
+    x4 = x4 << 7;
+    
+    x5 = x5 >> 7;
+    x6 = x6 >> 7;
+    x7 = x7 >> 7;
+    x8 = x8 >> 7;
+    
+    x2 = x2 >> 1;
+    x3 = x3 >> 2;
+    x4 = x4 >> 3;
+    
+    x5 = x5 << 3;
+    x6 = x6 << 2;
+    x7 = x7 << 1;
+    
+    uint8_t x_odd = x1 ^ x3 ^ x5 ^ x7;
+    uint8_t x_even = x2 ^ x4 ^ x6 ^ x8;
+    
+    uint8_t x = x_odd ^ x_even;
+	
+	return x;
+}
+
 static void remask(state_t * s, uint8_t m1, uint8_t m2, uint8_t m3, uint8_t m4, uint8_t m5, uint8_t m6, uint8_t m7, uint8_t m8)
+{
+  for (uint8_t i = 0; i < 4; i++)
+  {
+    (*s)[i][0] = bitSlice((*s)[i][0]) ^ bitSlice(bitSlice(m1) ^ bitSlice(m5));
+    (*s)[i][1] = (*s)[i][1] ^ (bitSlice(m2) ^ bitslice(m6));
+    (*s)[i][2] = bitSlice((*s)[i][2]) ^ bitSlice(m3 ^ m7);
+    (*s)[i][3] = bitSlice(bitSlice((*s)[i][3]) ^ bitSlice(bitSlice(m4) ^ bitSlice(m8)));
+  }
+}
+
+static void remask_init(state_t * s, uint8_t m1, uint8_t m2, uint8_t m3, uint8_t m4, uint8_t m5, uint8_t m6, uint8_t m7, uint8_t m8)
 {
   for (uint8_t i = 0; i < 4; i++)
   {
@@ -436,12 +485,12 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 
 	//Init masked key
 	//	Last round mask M' to mask 0
-	remask((state_t *) &RoundKeyMasked[(Nr * Nb * 4)], 0, 0, 0, 0, mask[5], mask[5], mask[5], mask[5]);
+	remask_init((state_t *) &RoundKeyMasked[(Nr * Nb * 4)], 0, 0, 0, 0, mask[5], mask[5], mask[5], mask[5]);
 
 	// Mask change from M1',M2',M3',M4' to M
 	for (uint8_t i = 0; i < Nr; i++)
 	{
-		remask((state_t *) &RoundKeyMasked[(i * Nb * 4)], mask[6], mask[7], mask[8], mask[9], mask[4], mask[4], mask[4], mask[4]);
+		remask_init((state_t *) &RoundKeyMasked[(i * Nb * 4)], mask[6], mask[7], mask[8], mask[9], mask[4], mask[4], mask[4], mask[4]);
 	}
 }
 
