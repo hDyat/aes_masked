@@ -210,7 +210,12 @@ static void SubBytesMasked(void)
   {
     for (j = 0; j < 4; ++j)
     {
-      (*state)[j][i] = SboxMasked[(*state)[j][i]];
+		uint8_t nibble_1 = SboxMasked[(*state)[j][i]] << 4;
+		uint8_t nibble_2 = SboxMasked[(*state)[j][i]] >> 4;
+		
+		nibble_2 = nibble_2 << 4;
+		nibble_1 = nibble_1 >> 4;
+      (*state)[j][i] = nibble_1 ^ nibble_2;
     }
   }
 }
@@ -480,8 +485,15 @@ static void CipherMasked(void)
 		{
 			for (j = 0; j < 4; ++j)
 			{
+				
+				uint8_t nibble_1 = SboxMasked[(*state)[j][i]] << 4;
+				uint8_t nibble_2 = SboxMasked[(*state)[j][i]] >> 4;
+				
+				nibble_2 = nibble_2 << 4;
+				nibble_1 = nibble_1 >> 4;
+				
 				(*state_yat)[j][i] ^= 0x5a;
-				(*state_yat)[j][i] = SboxMasked[(*state_yat)[j][i]];
+				(*state_yat)[j][i] = nibble_1 ^ nibble_2;
 				(*state)[j][i] = SboxMasked[(*state)[j][i]];
 			}
 		}
