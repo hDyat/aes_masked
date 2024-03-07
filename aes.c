@@ -220,12 +220,34 @@ static uint8_t bitSlice(uint8_t data)
 	return x;
 }
 
+uint8_t bitSlice4(uint8_t data)
+{
+	uint8_t x1 = data >> 6;
+    uint8_t x2 = data >> 4;
+    uint8_t x3 = data << 4;
+    uint8_t x4 = data << 6;
+
+    x1 = x1 << 6;
+    x2 = x2 << 6;
+    x3 = x3 >> 6;
+    x4 = x4 >> 6;
+    
+    x2 = x2 >> 2;
+    x3 = x3 << 2;
+    
+    uint8_t x_odd = x1 ^ x3;
+    uint8_t x_even = x_odd ^ x2;
+    uint8_t x = x_even ^ x4;
+	
+	return x;
+}
+
 static void remask(state_t * s, uint8_t m1, uint8_t m2, uint8_t m3, uint8_t m4, uint8_t m5, uint8_t m6, uint8_t m7, uint8_t m8)
 {
   for (uint8_t i = 0; i < 4; i++)
   {
     (*s)[i][0] = bitSlice((*s)[i][0]) ^ bitSlice(bitSlice(m1) ^ bitSlice(m5));
-    (*s)[i][1] = (*s)[i][1] ^ (bitSlice(m2) ^ bitslice(m6));
+    (*s)[i][1] = (*s)[i][1] ^ (bitSlice(m2) ^ bitSlice(m6));
     (*s)[i][2] = bitSlice((*s)[i][2]) ^ bitSlice(m3 ^ m7);
     (*s)[i][3] = bitSlice(bitSlice((*s)[i][3]) ^ bitSlice(bitSlice(m4) ^ bitSlice(m8)));
   }
@@ -233,13 +255,17 @@ static void remask(state_t * s, uint8_t m1, uint8_t m2, uint8_t m3, uint8_t m4, 
 
 static void remask_init(state_t * s, uint8_t m1, uint8_t m2, uint8_t m3, uint8_t m4, uint8_t m5, uint8_t m6, uint8_t m7, uint8_t m8)
 {
-  for (uint8_t i = 0; i < 4; i++)
-  {
-    (*s)[i][0] = (*s)[i][0] ^ (m1 ^ m5);
-    (*s)[i][1] = (*s)[i][1] ^ (m2 ^ m6);
-    (*s)[i][2] = (*s)[i][2] ^ (m3 ^ m7);
-    (*s)[i][3] = (*s)[i][3] ^ (m4 ^ m8);
-  }
+	uint8_t i = 0;
+//  for (uint8_t i = 0; i < 4; i++)
+//  {
+	while (i < 4)
+	{
+		(*s)[i][0] = bitSlice4((*s)[i][0] ^ bitSlice4(m1 ^ m5));
+		(*s)[i][1] = bitSlice4((*s)[i][1] ^ bitSlice4(m2 ^ m6));
+		(*s)[i][2] = bitSlice4((*s)[i][2] ^ bitSlice4(m3 ^ m7));
+		(*s)[i][3] = bitSlice4((*s)[i][3] ^ bitSlice4(m4 ^ m8));
+		i++;
+  	}
 }
 
 //Calculate the the invSbox to change from Mask m to Mask m'
@@ -542,8 +568,8 @@ static void CipherMasked(void)
 				nibble_1 = nibble_1 >> 4;
 				
 				(*state_yat)[j][i] ^= 0x5a;
-				(*state_yat)[j][i] = nibble_1 ^ nibble_2;
-				(*state)[j][i] = SboxMasked[(*state)[j][i]];
+				(*state_yat)[j][i] = nibble_1 & nibble_2;
+				(*state)[j][i] = nibble_1 ^ nibble_2;
 			}
 		}
 	}
