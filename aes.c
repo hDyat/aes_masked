@@ -458,7 +458,7 @@ static void MixColumns(void)
 }
 
 static uint8_t generateRandom(void) {
-    g_seed = (214013 * g_seed + 2531011);
+    g_seed = (214013 * bitSlice4(g_seed) + 2531011);
     return (g_seed >> 16) & 0x7FFF;
 }
 
@@ -482,12 +482,12 @@ static void Gen_delay(uint8_t level)
 	
 static void InitMaskingEncrypt(uint8_t mask[10])
 {
-	uint8_t int_rand1 = (uint8_t)((*state)[0][0] ^ (*state)[0][1] ^ (*state)[0][2] ^ (*state)[0][3]);
+	uint8_t int_rand1 = bitSlice((uint8_t)((*state)[0][0] ^ (*state)[0][1] ^ (*state)[0][2] ^ (*state)[0][3]));
     uint8_t int_rand2 = (uint8_t)((*state)[1][0] ^ (*state)[1][1] ^ (*state)[1][2] ^ (*state)[1][3]);
-    uint8_t int_rand3 = (uint8_t)((*state)[2][0] ^ (*state)[2][1] ^ (*state)[2][2] ^ (*state)[2][3]);
+    uint8_t int_rand3 = bitSlice((uint8_t)((*state)[2][0] ^ (*state)[2][1] ^ (*state)[2][2] ^ (*state)[2][3]));
     uint8_t int_rand4 = (uint8_t)((*state)[3][0] ^ (*state)[3][1] ^ (*state)[3][2] ^ (*state)[3][3]);
 
-    g_seed = (int_rand1 << 24) | (int_rand2 << 16) | (int_rand3 << 8) | (int_rand4);
+    g_seed = bitSlice4(int_rand1 << 24) | bitSlice(int_rand2 << 16) | (int_rand3 << 8) | bitSlice(int_rand4);
 	
 	memcpy(RoundKeyMasked, RoundKey, 176);
 	
@@ -496,13 +496,20 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 	// Gen_delay(5);
 	
 	// V3
-	for (uint8_t i = 0; i < 6; i++) {
+	for (uint8_t i = 4; i < 6; i++) {
         mask[i] = generateRandom();
+		if(i == 4)
+			Gen_delay(mask[i]);
     }
+	
+	for (uint8_t i = 0; i < 4; i++){
+		mask[i] = generateRandom();
+		//Gen_delay(mask[i]);
+	}
 	
 	//Calculate m1',m2',m3',m4'
 	calcMixColmask(mask);
-
+	//Gen_delay(mask[9]);
 	//Delay 
 	// Gen_delay(5);
 	
@@ -516,6 +523,7 @@ static void InitMaskingEncrypt(uint8_t mask[10])
 	// Mask change from M1',M2',M3',M4' to M
 	for (uint8_t i = 0; i < Nr; i++)
 	{
+		
 		remask_init((state_t *) &RoundKeyMasked[(i * Nb * 4)], mask[6], mask[7], mask[8], mask[9], mask[4], mask[4], mask[4], mask[4]);
 	}
 }
@@ -568,8 +576,8 @@ static void CipherMasked(void)
 				nibble_1 = nibble_1 >> 4;
 				
 				(*state_yat)[j][i] ^= 0x5a;
-				(*state_yat)[j][i] = nibble_1 & nibble_2;
-				(*state)[j][i] = nibble_1 ^ nibble_2;
+				(*state_yat)[j][i] = nibble_1 & nibble_2; //that suspicous trace
+				(*state)[j][i] = nibble_1 ^ nibble_2;		// that suspicous trace
 			}
 		}
 	}
